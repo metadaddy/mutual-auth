@@ -34,8 +34,9 @@ public class ClientSSLTransport implements Transport {
   private URL url;
   private SSLContext sc;
 
-  public ClientSSLTransport(SSLContext sc) {
+  public ClientSSLTransport(SSLContext sc, ConnectorConfig config) {
     this.sc = sc;
+    this.config = config;
   }
 
   @Override

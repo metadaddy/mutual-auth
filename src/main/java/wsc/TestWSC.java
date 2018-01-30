@@ -35,7 +35,7 @@ public class TestWSC {
   private static final String KEYSTORE_PASSWORD = System.getenv("KEYSTORE_PASSWORD");
 
   private static final int MUTUAL_AUTHENTICATION_PORT = 8443;
-  private static final String API_VERSION = "39.0";
+  private static final String API_VERSION = "41.0";
 
   public static void main(String[] args) throws Exception {
     // Make a KeyStore from the PKCS-12 file
@@ -49,21 +49,20 @@ public class TestWSC {
     kmf.init(ks, KEYSTORE_PASSWORD.toCharArray());
 
     // Now make an SSL Context with our Key Manager and the default Trust Manager
-    SSLContext sc = SSLContext.getInstance("TLS");
-    sc.init(kmf.getKeyManagers(), null, null);
+    SSLContext sslContext = SSLContext.getInstance("TLS");
+    sslContext.init(kmf.getKeyManagers(), null, null);
 
     // Login as normal to get instance URL and session token
     ConnectorConfig config = new ConnectorConfig();
     config.setAuthEndpoint("https://login.salesforce.com/services/Soap/u/39.0");
-    config.setSslContext(sc);
     config.setUsername(USERNAME);
     config.setPassword(PASSWORD);
 
-    // Let's see what's going on!
-    config.setTraceMessage(true);
+    // Uncomment for more detail on what's going on!
+    //config.setTraceMessage(true);
 
     // Make the partner connection
-    PartnerConnection connection = Connector.newConnection(config);
+    PartnerConnection partnerConnection = Connector.newConnection(config);
 
     // display some current settings
     System.out.println("Auth EndPoint: "+config.getAuthEndpoint());
@@ -76,29 +75,36 @@ public class TestWSC {
     // Override service endpoint port to 8443
     config.setServiceEndpoint(changePort(serviceEndpoint, MUTUAL_AUTHENTICATION_PORT));
 
+    // Set custom transport factory
+    config.setTransportFactory(new ClientSSLTransportFactory(sslContext));
+
     System.out.println("MA Service EndPoint: "+config.getServiceEndpoint());
 
     // Get some contacts via SOAP API
-    queryContacts(connection);
+    queryContacts(partnerConnection);
 
-    ConnectorConfig bulkConfig = new ConnectorConfig();
+    // Now for Bulk API... Need custom ConnectorConfig
+    ConnectorConfig bulkConfig = new MutualAuthConnectorConfig(sslContext);
+    bulkConfig.setTransportFactory(new ClientSSLTransportFactory(sslContext, bulkConfig));
+
+    // Set the session id in bulkConfig as usual
     bulkConfig.setSessionId(config.getSessionId());
 
-    // Usual procedure to make the Bulk connection from the Connector config,
-    // just need to set the SSLContext
+    // Usual procedure to make the 'REST endpoint'
     String soapEndpoint = config.getServiceEndpoint();
     String restEndpoint = soapEndpoint.substring(0, soapEndpoint.indexOf("Soap/"))
         + "async/" + API_VERSION;
-    config.setRestEndpoint(restEndpoint);
-    config.setTraceMessage(true);
-    config.setSslContext(sc);
+    bulkConfig.setRestEndpoint(restEndpoint);
 
-    System.out.println("MA Async EndPoint: "+config.getServiceEndpoint());
+    // Again, uncomment for more diagnostics
+    //bulkConfig.setTraceMessage(true);
+
+    System.out.println("MA Async EndPoint: "+bulkConfig.getServiceEndpoint());
 
     // Make the bulk connection
-    BulkConnection bulkConnection = new BulkConnection(config);
+    BulkConnection bulkConnection = new BulkConnection(bulkConfig);
 
-    // Try same via Bulk API
+    // Try same query via Bulk API
     queryContactsViaBulkAPI(bulkConnection);
   }
 
@@ -135,12 +141,12 @@ public class TestWSC {
     job.setContentType(ContentType.CSV);
 
     job = bulkConnection.createJob(job);
-    System.out.println("Created job: " + job);
+    System.out.println("Created job: " + job.getId());
 
     String query = "SELECT Id, FirstName, LastName, Account.Name FROM Contact WHERE AccountId != NULL ORDER BY CreatedDate DESC LIMIT 5";
     BatchInfo batch = bulkConnection.createBatchFromStream(job,
         new ByteArrayInputStream(query.getBytes(StandardCharsets.UTF_8)));
-    System.out.println("BatchInfo: "+batch);
+    System.out.println("Batch state is: "+batch.getState());
 
     QueryResultList queryResultList = null;
     BatchInfoList batchList = null;
@@ -152,6 +158,7 @@ public class TestWSC {
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
       }
+      // Adapted from more complex code that handles PK chunking...
       batchList = bulkConnection.getBatchInfoList(job.getId());
       for (BatchInfo b : batchList.getBatchInfo()) {
         if (b.getState() == BatchStateEnum.Failed) {
@@ -160,6 +167,7 @@ public class TestWSC {
         } else {
           if (b.getState() == BatchStateEnum.Completed) {
             batch = b;
+            System.out.println("Batch state is: "+batch.getState());
             queryResultList = bulkConnection.getQueryResultList(job.getId(), b.getId());
             break;
           }
