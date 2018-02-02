@@ -25,6 +25,16 @@
       <artifactId>force-partner-api</artifactId>
       <version>${sfwsc.version}</version>
     </dependency>
+    <dependency>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>httpclient</artifactId>
+      <version>4.5.2</version>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-client</artifactId>
+      <version>9.4.2.v20170220</version>
+    </dependency>
   </dependencies>
   <build>
     <plugins>
@@ -33,7 +43,7 @@
         <artifactId>exec-maven-plugin</artifactId>
         <version>1.2.1</version>
         <configuration>
-          <mainClass>wsc.Main</mainClass>
+          <mainClass>mutualauth.Main</mainClass>
         </configuration>
       </plugin>
     </plugins>

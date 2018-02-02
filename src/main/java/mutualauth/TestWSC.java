@@ -1,4 +1,4 @@
-package wsc;
+package mutualauth;
 
 import com.sforce.async.AsyncApiException;
 import com.sforce.async.BatchInfo;
@@ -54,7 +54,7 @@ public class TestWSC {
 
     // Login as normal to get instance URL and session token
     ConnectorConfig config = new ConnectorConfig();
-    config.setAuthEndpoint("https://login.salesforce.com/services/Soap/u/39.0");
+    config.setAuthEndpoint("https://login.salesforce.com/services/Soap/u/" + API_VERSION);
     config.setUsername(USERNAME);
     config.setPassword(PASSWORD);
 

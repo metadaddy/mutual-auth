@@ -1,4 +1,4 @@
-package wsc;
+package mutualauth;
 
 import com.sforce.ws.ConnectorConfig;
 
